@@ -30,19 +30,16 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   
   if (buffer_index == buffer_size) {
     double xAccel = 0;
+    double yAccel = 0;
+    double zAccel = 0;
+    
     for (int i = 0; i < buffer_size; i++) {
       xAccel += abs(s_buffer_x[i]);
-    }
-    xAccel /= buffer_size;
-    double yAccel = 0;
-    for (int i = 0; i < buffer_size; i++) {
       yAccel += abs(s_buffer_y[i]);
-    }
-    yAccel /= buffer_size;
-    double zAccel = 0;
-    for (int i = 0; i < buffer_size; i++) {
       zAccel += abs(s_buffer_z[i]);
     }
+    xAccel /= buffer_size;
+    yAccel /= buffer_size;
     zAccel /= buffer_size;
     
     if (xAccel <= 75 && yAccel <= 75 && zAccel <= 75) {
