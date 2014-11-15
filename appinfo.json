@@ -1,0 +1,19 @@
+{
+    "appKeys": {},
+    "capabilities": [
+        ""
+    ],
+    "companyName": "Richard and Barak",
+    "longName": "AutoWake",
+    "projectType": "native",
+    "resources": {
+        "media": []
+    },
+    "shortName": "AutoWake",
+    "uuid": "5e15e66b-fcc3-4546-8ec2-826c5265b08d",
+    "versionCode": 1,
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": false
+    }
+}
