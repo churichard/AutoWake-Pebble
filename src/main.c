@@ -5,9 +5,10 @@ static Window *s_main_window;
 
 static AppTimer* timer; // Timer
 static TextLayer *s_output_layer; // TextLayer
-static double s_buffer_x[100];
-static double s_buffer_y[100];
-static double s_buffer_z[100];
+static int buffer_size = 50;
+static double s_buffer_x[50];
+static double s_buffer_y[50];
+static double s_buffer_z[50];
 static int buffer_index = 0;
 
 /*
@@ -27,32 +28,28 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   // Increment buffer index
   buffer_index++;
   
-  if (buffer_index == 100) {
+  if (buffer_index == buffer_size) {
     double xAccel = 0;
-    for (int i = 0; i < 100; i++) {
-      xAccel += s_buffer_x[i];
+    for (int i = 0; i < buffer_size; i++) {
+      xAccel += abs(s_buffer_x[i]);
     }
-    xAccel /= 100;
+    xAccel /= buffer_size;
     double yAccel = 0;
-    for (int i = 0; i < 100; i++) {
-      yAccel += s_buffer_y[i];
+    for (int i = 0; i < buffer_size; i++) {
+      yAccel += abs(s_buffer_y[i]);
     }
-    yAccel /= 100;
+    yAccel /= buffer_size;
     double zAccel = 0;
-    for (int i = 0; i < 100; i++) {
-      zAccel += s_buffer_z[i];
+    for (int i = 0; i < buffer_size; i++) {
+      zAccel += abs(s_buffer_z[i]);
     }
-    zAccel /= 100;
+    zAccel /= buffer_size;
     
-    if (xAccel < 25 && yAccel < 25 && zAccel < 25) {
+    if (xAccel <= 75 && yAccel <= 75 && zAccel <= 75) {
       // Vibrate
       vibes_double_pulse();
     }
     
-    // Clear the buffers
-    memset(&s_buffer_x[0], 0, sizeof(s_buffer_x));
-    memset(&s_buffer_y[0], 0, sizeof(s_buffer_y));
-    memset(&s_buffer_z[0], 0, sizeof(s_buffer_z));
     // Resets the buffer index
     buffer_index = 0;
   }
