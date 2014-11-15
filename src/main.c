@@ -2,8 +2,15 @@
   
 static Window *s_main_window;
 
-static void main_window_load(Window *window) {
+static AppTimer* timer;
 
+static void timer_callback(void *data) {
+  vibes_double_pulse();
+  timer = app_timer_register(5000, timer_callback, NULL);
+}
+
+static void main_window_load(Window *window) {
+  timer = app_timer_register(5000, timer_callback, NULL);
 }
 
 static void main_window_unload(Window *window) {
@@ -22,8 +29,6 @@ static void init() {
 
   // Show the Window on the watch, with animated=true
   window_stack_push(s_main_window, true);
-  
-  vibes_double_pulse();
 }
 
 static void deinit() {
