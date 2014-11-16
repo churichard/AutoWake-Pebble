@@ -1,65 +1,95 @@
 #include <pebble.h>
 #include <stdlib.h>
-  
+
+enum {BUFFER_SIZE = 50};
+enum {STILL = 0, MARGIN = 500}; //1050000, 50000
 static Window *s_main_window;
 
-static AppTimer* timer; // Timer
+// static AppTimer* timer; // Timer
 static TextLayer *s_output_layer; // TextLayer
-static int buffer_size = 50;
-static double s_buffer_x[50];
-static double s_buffer_y[50];
-static double s_buffer_z[50];
-static int buffer_index = 0;
+static int a_buffer_x[BUFFER_SIZE];
+static int a_buffer_y[BUFFER_SIZE];
+static int a_buffer_z[BUFFER_SIZE];
 
-/*
-static void timer_callback(void *data) {
-  // Vibrates two times
-  vibes_double_pulse();
-  // Sets a new timer
-  timer = app_timer_register(5000, timer_callback, NULL);
-}*/
+static int j_buffer_x[BUFFER_SIZE];
+static int j_buffer_y[BUFFER_SIZE];
+static int j_buffer_z[BUFFER_SIZE];
+
+int main2(void);  //TODO: Remove. Temporary tests
+
+
+// static void timer_callback(void *data) {
+//   // Vibrates two times
+//   vibes_double_pulse();
+//   // Sets a new timer
+//   timer = app_timer_register(5000, timer_callback, NULL);
+// }
 
 static void data_handler(AccelData *data, uint32_t num_samples) {
+  static int buffer_index = 0;
+  static int firstPass = 1; //true for first pass through array
+  static int firstA = 1;    //true for first acceleration reading
   // Store the accelerometer data
-  s_buffer_x[buffer_index] = (double)data[0].x;
-  s_buffer_y[buffer_index] = (double)data[0].y;
-  s_buffer_z[buffer_index] = (double)data[0].z;
+  a_buffer_x[buffer_index] = data[0].x;
+  a_buffer_y[buffer_index] = data[0].y;
+  a_buffer_z[buffer_index] = data[0].z;
+  
+  if (buffer_index == 0 && !firstA) {
+    j_buffer_x[buffer_index] = a_buffer_x[buffer_index] - a_buffer_x[BUFFER_SIZE-1];
+    j_buffer_y[buffer_index] = a_buffer_y[buffer_index] - a_buffer_y[BUFFER_SIZE-1];
+    j_buffer_z[buffer_index] = a_buffer_z[buffer_index] - a_buffer_z[BUFFER_SIZE-1];
+  }
+  else if(!firstA) {
+    j_buffer_x[buffer_index] = a_buffer_x[buffer_index] - a_buffer_x[buffer_index-1];
+    j_buffer_y[buffer_index] = a_buffer_y[buffer_index] - a_buffer_y[buffer_index-1];
+    j_buffer_z[buffer_index] = a_buffer_z[buffer_index] - a_buffer_z[buffer_index-1];
+  }
+  else {
+    firstA = 0;
+  }
+  
+  /*
+  * jerk values are taken to be the squares of the 
+  * actual jerks
+  */
+  int xJolt = 0;
+  int yJolt = 0;
+  int zJolt = 0;
+  for (int i = 0; i < BUFFER_SIZE; i++) {
+    xJolt += j_buffer_x[i]*j_buffer_x[i];
+    yJolt += j_buffer_y[i]*j_buffer_y[i];
+    zJolt += j_buffer_z[i]*j_buffer_z[i];
+  }
+  //square of the average magnitude of acceleration
+  int jolt = (xJolt + yJolt + zJolt) / BUFFER_SIZE;
+  
+  if ((abs(jolt - STILL) < MARGIN) && !firstPass) {
+    // Vibrate
+//     vibes_double_pulse();
+  }
   
   // Increment buffer index
   buffer_index++;
-  
-  if (buffer_index == buffer_size) {
-    double xAccel = 0;
-    double yAccel = 0;
-    double zAccel = 0;
-    
-    for (int i = 0; i < buffer_size; i++) {
-      xAccel += abs(s_buffer_x[i]);
-      yAccel += abs(s_buffer_y[i]);
-      zAccel += abs(s_buffer_z[i]);
-    }
-    xAccel /= buffer_size;
-    yAccel /= buffer_size;
-    zAccel /= buffer_size;
-    
-    if (xAccel <= 75 && yAccel <= 75 && zAccel <= 75) {
-      // Vibrate
-      vibes_double_pulse();
-    }
-    
+  if (buffer_index == BUFFER_SIZE) { 
     // Resets the buffer index
     buffer_index = 0;
+    // Not first
+    firstPass = 0;
   }
-  /*
-  snprintf(s_buffer, sizeof(s_buffer), 
-    "N X,Y,Z\n0 %d,%d,%d\n1 %d,%d,%d\n2 %d,%d,%d", 
-    data[0].x, data[0].y, data[0].z, 
-    data[1].x, data[1].y, data[1].z, 
-    data[2].x, data[2].y, data[2].z
+  
+  
+  // Long lived buffer
+  static char message[128];
+  // Compose string of all data
+  snprintf(message, sizeof(message), 
+    "X: %d  \nY: %d  \nZ: %d\nAverage Jolt: \n%d\nFirst: %s", 
+    xJolt/BUFFER_SIZE, yJolt/BUFFER_SIZE, zJolt/BUFFER_SIZE,
+    jolt - STILL,
+    firstPass ? "True" : "False"
   );
 
   //Show the data
-  text_layer_set_text(s_output_layer, s_buffer);*/
+  text_layer_set_text(s_output_layer, message);
 }
 
 static void main_window_load(Window *window) {
@@ -99,6 +129,9 @@ static void init() {
   int num_samples = 1;
   accel_data_service_subscribe(num_samples, data_handler);
   
+  //Change the accelerometer sampling rate. Not Needed.
+  //accel_service_set_samples_per_update(num_samples);
+   
   // Set the sampling rate for the accelerometer
   accel_service_set_sampling_rate(ACCEL_SAMPLING_10HZ);
 }
@@ -112,6 +145,8 @@ static void deinit() {
 }
 
 int main(void) {
+//   main2();
+//   return 0;
   init();
   app_event_loop();
   deinit();
