@@ -2,7 +2,7 @@
 #include <pebble.h>
 
 //-------Constants from main.c--------//
-enum {MAX_BUFFER_SIZE = 600, SAMPLING_RATE = ACCEL_SAMPLING_10HZ, FACTOR = 10};
+enum {MAX_BUFFER_SIZE = 1800, SAMPLING_RATE = ACCEL_SAMPLING_10HZ, FACTOR = 10};
 enum {STILL = 0, MARGIN = 400 * SAMPLING_RATE * SAMPLING_RATE / FACTOR / FACTOR};
 enum {RING = 'r'};
 
