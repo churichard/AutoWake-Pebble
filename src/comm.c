@@ -6,7 +6,7 @@ int bVibration = 1;    // boolean on/off
 int bSound = 0;        // boolean on/off
 int bSwitch = ACC;       // boolean on/off 
 int iSensitivity;  // integer values 0 to 400. Initialized by init() in main.c
-int iDelay = 60;        // seconds
+int iDelay = 20;        // seconds
 
 //function from main.c
 int reset_data_handler();
@@ -32,7 +32,7 @@ void inbox_received_callback(DictionaryIterator *iterator, void *context) {
         iSensitivity = (200 + (int)t->value->int32) * SAMPLING_RATE * SAMPLING_RATE / FACTOR / FACTOR;
         break;
       case DELAY:
-        iDelay = (int)t->value->int32;
+        iDelay = ((int)t->value->int32 * SAMPLING_RATE < MAX_BUFFER_SIZE)? (int)t->value->int32 : MAX_BUFFER_SIZE;
         reset_data_handler();
         break;
       default:

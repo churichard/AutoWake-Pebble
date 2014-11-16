@@ -19,6 +19,7 @@ uint32_t segments[NUM_VIBES];
 static Window *s_main_window;
 
 // static AppTimer* timer; // Timer
+static TextLayer *s_debug_layer; // TextLayer
 static TextLayer *s_output_layer; // TextLayer
 static int a_buffer_x[MAX_BUFFER_SIZE];
 static int a_buffer_y[MAX_BUFFER_SIZE];
@@ -38,6 +39,8 @@ void inbox_received_callback(DictionaryIterator *iterator, void *context);
 void inbox_dropped_callback(AppMessageResult reason, void *context);
 void outbox_failed_callback(DictionaryIterator *iterator, AppMessageResult reason, void *context);
 void outbox_sent_callback(DictionaryIterator *iterator, void *context);
+
+enum {debug = 0};
 
 /* 
  * Vibrate with a random vibration scheme
@@ -112,13 +115,51 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   //square of the average magnitude of acceleration
   int jolt = (xJolt + yJolt + zJolt) / userBufferSize;
   
+    // Long lived buffer
+  static char message[128];
+  static int keep = 0;
+  static int load = 0;
+  
+  if (load < 2*SAMPLING_RATE) {
+    text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
+    text_layer_set_text_alignment(s_output_layer, GTextAlignmentLeft);
+    text_layer_set_text(s_output_layer, "\n\n\n Loading...");
+    load++;
+  }
+  else if (firstPass || keep <= 0){
+    keep = 0;
+    text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_DROID_SERIF_28_BOLD));
+    text_layer_set_text_alignment(s_output_layer, GTextAlignmentLeft);
+    text_layer_set_text(s_output_layer, "\n  Auto\n      Wake");
+  }
+  else {
+    keep--;
+  }
+    
+  if (debug) {
+    // Compose string of debug data
+    snprintf(message, sizeof(message), 
+      "X: %d  \nY: %d  \nZ: %d\nAverage Jolt: \n%d\nFirst: %s", 
+      xJolt/userBufferSize, yJolt/userBufferSize, zJolt/userBufferSize,
+      jolt - STILL,
+      firstPass ? "True" : "False"
+    );
+    text_layer_set_font(s_debug_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
+    //Show the data
+    text_layer_set_text(s_debug_layer, message);
+  }
+  
   if ((abs(jolt - STILL) < iSensitivity) && !firstPass) {
-    if (bVibration) {
-      vibrate();
-    }
     if (bSound) {
       ring();
     }
+    if (bVibration) {
+      vibrate();
+    }
+    text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_DROID_SERIF_28_BOLD));
+    text_layer_set_text_alignment(s_output_layer, GTextAlignmentCenter);
+    text_layer_set_text(s_output_layer, "\nWAKE\nUP!!");
+    keep = 3*SAMPLING_RATE;
   }
   
   // Increment buffer index
@@ -129,20 +170,7 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
     // Not first
     firstPass = 0;
   }
-  
-  
-  // Long lived buffer
-  static char message[128];
-  // Compose string of all data
-  snprintf(message, sizeof(message), 
-    "X: %d  \nY: %d  \nZ: %d\nAverage Jolt: \n%d\nFirst: %s", 
-    xJolt/userBufferSize, yJolt/userBufferSize, zJolt/userBufferSize,
-    jolt - STILL,
-    firstPass ? "True" : "False"
-  );
-
-  //Show the data
-  text_layer_set_text(s_output_layer, message);
+    
   handlerKey = 0;
 }
 void reset_data_handler() {
@@ -158,11 +186,19 @@ static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect window_bounds = layer_get_bounds(window_layer);
   
+  // Create debug TextLayer
+  s_debug_layer = text_layer_create(GRect(5, 0, window_bounds.size.w - 10, window_bounds.size.h));
+  text_layer_set_font(s_debug_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
+  text_layer_set_text(s_debug_layer, "No data yet.");
+  text_layer_set_overflow_mode(s_debug_layer, GTextOverflowModeWordWrap);
+//   layer_set_update_proc(layer, some_update_proc);
+  layer_add_child(window_layer, text_layer_get_layer(s_debug_layer));
+  
   // Create output TextLayer
   s_output_layer = text_layer_create(GRect(5, 0, window_bounds.size.w - 10, window_bounds.size.h));
-  text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
-  text_layer_set_text(s_output_layer, "No data yet.");
-  text_layer_set_overflow_mode(s_output_layer, GTextOverflowModeWordWrap);
+  text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_DROID_SERIF_28_BOLD));
+//   text_layer_set_text(s_output_layer, "\n  Auto\n      Wake");
+//   layer_set_update_proc(layer, some_update_proc);
   layer_add_child(window_layer, text_layer_get_layer(s_output_layer));
   
   // Creates a new timer
@@ -187,6 +223,7 @@ static void init() {
   // Show the Window on the watch, with animated=true
   window_stack_push(s_main_window, true);
   
+  
   // Subscribe to the accelerometer data service
   int num_samples = 1;
   accel_data_service_subscribe(num_samples, data_handler);
@@ -197,12 +234,11 @@ static void init() {
   //Change the accelerometer sampling rate. Not Needed.
   //accel_service_set_samples_per_update(num_samples);
   
-  int userDelay = 5;
   
   // Set the sampling rate for the accelerometer
-  accel_service_set_sampling_rate(SAMPLING_RATE);
+  accel_service_set_sampling_rate((AccelSamplingRate)SAMPLING_RATE);
   
-  userBufferSize = SAMPLING_RATE * userDelay;
+  userBufferSize = SAMPLING_RATE * iDelay;
   
   
   // Register callbacks
