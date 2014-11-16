@@ -121,9 +121,9 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   static int load = 0;
   
   if (load < 2*SAMPLING_RATE) {
-    text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK));
+    text_layer_set_font(s_output_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
     text_layer_set_text_alignment(s_output_layer, GTextAlignmentLeft);
-    text_layer_set_text(s_output_layer, "\n\n\n Loading...");
+    text_layer_set_text(s_output_layer, "\n\nLoading...");
     load++;
   }
   else if (firstPass || keep <= 0){
