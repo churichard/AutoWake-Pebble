@@ -1,20 +1,29 @@
 #include <pebble.h>
 #include <stdlib.h>
 
-enum {BUFFER_SIZE = 50};
-enum {STILL = 0, MARGIN = 500}; //1050000, 50000
+enum {MAX_BUFFER_SIZE = 600, SAMPLING_RATE = ACCEL_SAMPLING_10HZ, FACTOR = 10};
+enum {STILL = 0, MARGIN = 200 * SAMPLING_RATE * SAMPLING_RATE / FACTOR / FACTOR};
+int userBufferSize;
+
+//Vibration patterns
+enum {NUM_VIBES= 12};
+uint32_t segments[NUM_VIBES];
+
 static Window *s_main_window;
 
 // static AppTimer* timer; // Timer
 static TextLayer *s_output_layer; // TextLayer
-static int a_buffer_x[BUFFER_SIZE];
-static int a_buffer_y[BUFFER_SIZE];
-static int a_buffer_z[BUFFER_SIZE];
+static int a_buffer_x[MAX_BUFFER_SIZE];
+static int a_buffer_y[MAX_BUFFER_SIZE];
+static int a_buffer_z[MAX_BUFFER_SIZE];
 
-static int j_buffer_x[BUFFER_SIZE];
-static int j_buffer_y[BUFFER_SIZE];
-static int j_buffer_z[BUFFER_SIZE];
+static int j_buffer_x[MAX_BUFFER_SIZE];
+static int j_buffer_y[MAX_BUFFER_SIZE];
+static int j_buffer_z[MAX_BUFFER_SIZE];
 
+/*
+Test Code that gives acceleration readings
+*/
 int main2(void);  //TODO: Remove. Temporary tests
 
 
@@ -35,42 +44,50 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   a_buffer_z[buffer_index] = data[0].z;
   
   if (buffer_index == 0 && !firstA) {
-    j_buffer_x[buffer_index] = a_buffer_x[buffer_index] - a_buffer_x[BUFFER_SIZE-1];
-    j_buffer_y[buffer_index] = a_buffer_y[buffer_index] - a_buffer_y[BUFFER_SIZE-1];
-    j_buffer_z[buffer_index] = a_buffer_z[buffer_index] - a_buffer_z[BUFFER_SIZE-1];
+    j_buffer_x[buffer_index] = (a_buffer_x[buffer_index] - a_buffer_x[userBufferSize-1]) * SAMPLING_RATE / FACTOR;
+    j_buffer_y[buffer_index] = (a_buffer_y[buffer_index] - a_buffer_y[userBufferSize-1]) * SAMPLING_RATE / FACTOR;
+    j_buffer_z[buffer_index] = (a_buffer_z[buffer_index] - a_buffer_z[userBufferSize-1]) * SAMPLING_RATE / FACTOR;
   }
   else if(!firstA) {
-    j_buffer_x[buffer_index] = a_buffer_x[buffer_index] - a_buffer_x[buffer_index-1];
-    j_buffer_y[buffer_index] = a_buffer_y[buffer_index] - a_buffer_y[buffer_index-1];
-    j_buffer_z[buffer_index] = a_buffer_z[buffer_index] - a_buffer_z[buffer_index-1];
+    j_buffer_x[buffer_index] = (a_buffer_x[buffer_index] - a_buffer_x[buffer_index-1]) * SAMPLING_RATE / FACTOR;
+    j_buffer_y[buffer_index] = (a_buffer_y[buffer_index] - a_buffer_y[buffer_index-1]) * SAMPLING_RATE / FACTOR;
+    j_buffer_z[buffer_index] = (a_buffer_z[buffer_index] - a_buffer_z[buffer_index-1]) * SAMPLING_RATE / FACTOR;
   }
   else {
     firstA = 0;
   }
   
   /*
-  * jerk values are taken to be the squares of the 
-  * actual jerks
+  * Jolt values are taken to be the squares of the 
+  * actual jolts
   */
   int xJolt = 0;
   int yJolt = 0;
   int zJolt = 0;
-  for (int i = 0; i < BUFFER_SIZE; i++) {
+  for (int i = 0; i < userBufferSize; i++) {
     xJolt += j_buffer_x[i]*j_buffer_x[i];
     yJolt += j_buffer_y[i]*j_buffer_y[i];
     zJolt += j_buffer_z[i]*j_buffer_z[i];
   }
   //square of the average magnitude of acceleration
-  int jolt = (xJolt + yJolt + zJolt) / BUFFER_SIZE;
+  int jolt = (xJolt + yJolt + zJolt) / userBufferSize;
   
   if ((abs(jolt - STILL) < MARGIN) && !firstPass) {
-    // Vibrate
-//     vibes_double_pulse();
+    // Vibrate with a random vibration scheme
+    for(int i = 0; i < NUM_VIBES; i += 2) {
+      segments[i] = rand() % 300 + 100;
+      segments[i+1] = rand() % segments[i] + 100;
+    }
+    VibePattern pat = { 
+      .durations = segments,
+      .num_segments = NUM_VIBES,
+    };
+    vibes_enqueue_custom_pattern(pat);
   }
   
   // Increment buffer index
   buffer_index++;
-  if (buffer_index == BUFFER_SIZE) { 
+  if (buffer_index >= userBufferSize) { 
     // Resets the buffer index
     buffer_index = 0;
     // Not first
@@ -83,7 +100,7 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   // Compose string of all data
   snprintf(message, sizeof(message), 
     "X: %d  \nY: %d  \nZ: %d\nAverage Jolt: \n%d\nFirst: %s", 
-    xJolt/BUFFER_SIZE, yJolt/BUFFER_SIZE, zJolt/BUFFER_SIZE,
+    xJolt/userBufferSize, yJolt/userBufferSize, zJolt/userBufferSize,
     jolt - STILL,
     firstPass ? "True" : "False"
   );
@@ -129,11 +146,17 @@ static void init() {
   int num_samples = 1;
   accel_data_service_subscribe(num_samples, data_handler);
   
+
+  
   //Change the accelerometer sampling rate. Not Needed.
   //accel_service_set_samples_per_update(num_samples);
-   
+  
+  int userDelay = 5;
+  
   // Set the sampling rate for the accelerometer
-  accel_service_set_sampling_rate(ACCEL_SAMPLING_10HZ);
+  accel_service_set_sampling_rate(SAMPLING_RATE);
+  
+  userBufferSize = SAMPLING_RATE * userDelay;
 }
 
 static void deinit() {
