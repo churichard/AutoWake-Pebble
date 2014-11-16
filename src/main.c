@@ -1,9 +1,16 @@
 #include <pebble.h>
 #include <stdlib.h>
+#include "const.h"
 
-enum {MAX_BUFFER_SIZE = 600, SAMPLING_RATE = ACCEL_SAMPLING_10HZ, FACTOR = 10};
-enum {STILL = 0, MARGIN = 200 * SAMPLING_RATE * SAMPLING_RATE / FACTOR / FACTOR};
+//extent of array used. Must be less than MAX_BUFFER_SIZE.
 int userBufferSize;
+
+//settings maintained by const.h
+extern int bVibration;    // boolean on/off
+extern int bSound;        // boolean on/off
+extern int bSwitch;       // boolean on/off 
+extern int iSensitivity;  // integer values 0 to 400
+extern int iDelay;        // seconds
 
 //Vibration patterns
 enum {NUM_VIBES= 12};
@@ -26,6 +33,38 @@ Test Code that gives acceleration readings
 */
 int main2(void);  //TODO: Remove. Temporary tests
 
+//External Functions
+void inbox_received_callback(DictionaryIterator *iterator, void *context);
+void inbox_dropped_callback(AppMessageResult reason, void *context);
+void outbox_failed_callback(DictionaryIterator *iterator, AppMessageResult reason, void *context);
+void outbox_sent_callback(DictionaryIterator *iterator, void *context);
+
+/* 
+ * Vibrate with a random vibration scheme
+ */
+static void vibrate() {
+  for(int i = 0; i < NUM_VIBES; i += 2) {
+    segments[i] = rand() % 300 + 100;
+    segments[i+1] = rand() % segments[i] + 100;
+  }
+  VibePattern pat = { 
+    .durations = segments,
+    .num_segments = NUM_VIBES,
+  };
+  vibes_enqueue_custom_pattern(pat);
+}
+
+/* 
+ * Call on the phone to ring
+ */
+static void ring() {
+  //Ring the phone
+  DictionaryIterator *iter;
+  app_message_outbox_begin(&iter);
+  Tuplet ringTuplet = TupletInteger(RING, 2550);
+  dict_write_tuplet(iter, &ringTuplet);
+  app_message_outbox_send();
+}
 
 // static void timer_callback(void *data) {
 //   // Vibrates two times
@@ -33,11 +72,12 @@ int main2(void);  //TODO: Remove. Temporary tests
 //   // Sets a new timer
 //   timer = app_timer_register(5000, timer_callback, NULL);
 // }
-
+static int buffer_index = 0;
+static int firstPass = 1; //true for first pass through array
+static int firstA = 1;    //true for first acceleration reading
+static int handlerKey = 0;
 static void data_handler(AccelData *data, uint32_t num_samples) {
-  static int buffer_index = 0;
-  static int firstPass = 1; //true for first pass through array
-  static int firstA = 1;    //true for first acceleration reading
+  handlerKey = 1;
   // Store the accelerometer data
   a_buffer_x[buffer_index] = data[0].x;
   a_buffer_y[buffer_index] = data[0].y;
@@ -72,17 +112,13 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
   //square of the average magnitude of acceleration
   int jolt = (xJolt + yJolt + zJolt) / userBufferSize;
   
-  if ((abs(jolt - STILL) < MARGIN) && !firstPass) {
-    // Vibrate with a random vibration scheme
-    for(int i = 0; i < NUM_VIBES; i += 2) {
-      segments[i] = rand() % 300 + 100;
-      segments[i+1] = rand() % segments[i] + 100;
+  if ((abs(jolt - STILL) < iSensitivity) && !firstPass) {
+    if (bVibration) {
+      vibrate();
     }
-    VibePattern pat = { 
-      .durations = segments,
-      .num_segments = NUM_VIBES,
-    };
-    vibes_enqueue_custom_pattern(pat);
+    if (bSound) {
+      ring();
+    }
   }
   
   // Increment buffer index
@@ -107,7 +143,16 @@ static void data_handler(AccelData *data, uint32_t num_samples) {
 
   //Show the data
   text_layer_set_text(s_output_layer, message);
+  handlerKey = 0;
 }
+void reset_data_handler() {
+  while(handlerKey);
+  userBufferSize = SAMPLING_RATE * iDelay;
+  firstPass = 1; //since the values in the array are not full yet
+//   buffer_index = 0;
+//   firstA = 1;    //true for first acceleration reading
+}
+
 
 static void main_window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
@@ -146,7 +191,8 @@ static void init() {
   int num_samples = 1;
   accel_data_service_subscribe(num_samples, data_handler);
   
-
+  //Set the default sensitivity
+  iSensitivity = (400) * SAMPLING_RATE * SAMPLING_RATE / FACTOR / FACTOR;
   
   //Change the accelerometer sampling rate. Not Needed.
   //accel_service_set_samples_per_update(num_samples);
@@ -157,6 +203,16 @@ static void init() {
   accel_service_set_sampling_rate(SAMPLING_RATE);
   
   userBufferSize = SAMPLING_RATE * userDelay;
+  
+  
+  // Register callbacks
+  app_message_register_inbox_received(inbox_received_callback);
+  app_message_register_inbox_dropped(inbox_dropped_callback);
+  app_message_register_outbox_failed(outbox_failed_callback);
+  app_message_register_outbox_sent(outbox_sent_callback);
+  
+  // Open AppMessage
+  app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
 }
 
 static void deinit() {
