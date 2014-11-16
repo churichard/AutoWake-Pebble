@@ -32,7 +32,7 @@ void inbox_received_callback(DictionaryIterator *iterator, void *context) {
         iSensitivity = (200 + (int)t->value->int32) * SAMPLING_RATE * SAMPLING_RATE / FACTOR / FACTOR;
         break;
       case DELAY:
-        iDelay = ((int)t->value->int32 * SAMPLING_RATE < MAX_BUFFER_SIZE)? (int)t->value->int32 : MAX_BUFFER_SIZE;
+        iDelay = ((int)t->value->int32 * SAMPLING_RATE < MAX_BUFFER_SIZE)? (int)t->value->int32 : MAX_BUFFER_SIZE / SAMPLING_RATE;
         reset_data_handler();
         break;
       default:
