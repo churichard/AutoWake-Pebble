@@ -1,4 +1,4 @@
-Pebble-AutoWake
+AutoWake (Pebble app)
 ===============
 
 A Pebble app that helps you stay awake in class and in meetings.
